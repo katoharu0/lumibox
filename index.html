@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e16" />
+<meta name="description" content="Lumibox — 光の箱をはこぶ、なめらかで気持ちいい倉庫番パズル。スマホでも遊べます。" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Lumibox — 光の箱パズル</title>
+<style>
+  :root{
+    --bg:#0a0e16;
+    --ink:#e8eef7;
+    --muted:#8b97ad;
+    --accent:#a78bfa;
+    --panel:rgba(20,26,40,0.86);
+    --line:rgba(255,255,255,0.08);
+    --safe-top:env(safe-area-inset-top, 0px);
+    --safe-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:
+      radial-gradient(1200px 800px at 50% -10%, #141d33 0%, #0a0e16 55%, #070a11 100%);
+    color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, system-ui, sans-serif;
+    overflow:hidden;
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:none;
+  }
+  #app{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    padding-top:var(--safe-top);
+    padding-bottom:var(--safe-bottom);
+  }
+
+  /* ===== 上部HUD ===== */
+  #hud{
+    flex:0 0 auto;
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+  }
+  .title-wrap{display:flex; flex-direction:column; min-width:0;}
+  .title{font-weight:800; letter-spacing:1px; font-size:15px; line-height:1.1;
+    background:linear-gradient(90deg,#a78bfa,#22d3ee 60%,#f472b6);
+    -webkit-background-clip:text; background-clip:text; color:transparent; white-space:nowrap;}
+  .sub{font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .spacer{flex:1 1 auto;}
+  .stat{display:flex; flex-direction:column; align-items:center; min-width:46px;}
+  .stat .v{font-weight:700; font-size:16px; font-variant-numeric:tabular-nums;}
+  .stat .k{font-size:10px; color:var(--muted); letter-spacing:.5px;}
+
+  .btn{
+    appearance:none; border:1px solid var(--line);
+    background:rgba(255,255,255,0.04);
+    color:var(--ink); border-radius:12px;
+    width:42px; height:42px; display:grid; place-items:center;
+    font-size:18px; cursor:pointer; transition:transform .08s, background .15s, opacity .15s;
+  }
+  .btn:active{transform:scale(0.92); background:rgba(255,255,255,0.10);}
+  .btn:disabled{opacity:.35;}
+  .btn svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+
+  /* ===== 盤面 ===== */
+  #stage{flex:1 1 auto; position:relative; min-height:0;}
+  #board{position:absolute; inset:0; width:100%; height:100%; display:block;}
+  #tip{
+    position:absolute; left:50%; top:12px; transform:translateX(-50%);
+    background:var(--panel); border:1px solid var(--line);
+    padding:8px 16px; border-radius:999px; font-size:13px; color:var(--ink);
+    max-width:90%; text-align:center; backdrop-filter:blur(8px);
+    box-shadow:0 8px 30px rgba(0,0,0,.4);
+    opacity:0; transition:opacity .4s, transform .4s; pointer-events:none;
+    transform:translateX(-50%) translateY(-8px);
+  }
+  #tip.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  /* ===== 下部操作（モバイル用Dパッド） ===== */
+  #pad{
+    flex:0 0 auto; display:none;
+    grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr);
+    gap:10px; padding:10px 18px 16px; max-width:330px; width:100%; margin:0 auto;
+    align-self:center;
+  }
+  body.touch #pad{display:grid;}
+  .dbtn{
+    appearance:none; border:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    color:var(--ink); border-radius:16px; height:54px; font-size:24px;
+    display:grid; place-items:center; cursor:pointer; transition:transform .06s, background .12s;
+  }
+  .dbtn:active{transform:scale(0.94); background:rgba(167,139,250,0.25);}
+  .dbtn svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+  #dUp{grid-column:2;grid-row:1;}
+  #dLeft{grid-column:1;grid-row:2;}
+  #dDown{grid-column:2;grid-row:2;}
+  #dRight{grid-column:3;grid-row:2;}
+
+  /* ===== オーバーレイ共通 ===== */
+  .overlay{
+    position:absolute; inset:0; z-index:20;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(7,10,17,0.72); backdrop-filter:blur(10px);
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  .overlay.show{opacity:1; pointer-events:auto;}
+  .card{
+    width:min(92vw,420px); max-height:86vh; overflow:auto;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:22px; padding:22px; box-shadow:0 24px 80px rgba(0,0,0,.6);
+  }
+  .card h1{margin:0 0 4px; font-size:26px; letter-spacing:1px;
+    background:linear-gradient(90deg,#a78bfa,#22d3ee 60%,#f472b6);
+    -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .card h2{margin:0 0 12px; font-size:20px;}
+  .card p{margin:6px 0; color:var(--muted); font-size:14px; line-height:1.6;}
+  .big-btn{
+    appearance:none; border:none; cursor:pointer;
+    width:100%; padding:14px; margin-top:14px; border-radius:14px;
+    font-size:16px; font-weight:700; color:#0a0e16;
+    background:linear-gradient(90deg,#a78bfa,#22d3ee);
+    transition:transform .08s, filter .15s;
+  }
+  .big-btn:active{transform:scale(0.98); filter:brightness(1.1);}
+  .ghost-btn{
+    appearance:none; cursor:pointer; width:100%; padding:12px; margin-top:10px;
+    border-radius:14px; font-size:15px; font-weight:600; color:var(--ink);
+    background:rgba(255,255,255,0.05); border:1px solid var(--line);
+  }
+  .ghost-btn:active{background:rgba(255,255,255,0.12);}
+
+  /* ===== レベル選択 ===== */
+  .lvgrid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:14px;}
+  .lvcell{
+    position:relative; aspect-ratio:1; border-radius:14px; cursor:pointer;
+    border:1px solid var(--line); background:rgba(255,255,255,0.04);
+    display:grid; place-items:center; font-weight:700; font-size:18px;
+    transition:transform .08s, background .15s;
+  }
+  .lvcell:active{transform:scale(0.94);}
+  .lvcell.locked{opacity:.35; cursor:not-allowed;}
+  .lvcell.cleared{background:linear-gradient(180deg, rgba(34,211,238,0.18), rgba(167,139,250,0.12)); border-color:rgba(34,211,238,0.4);}
+  .lvcell .chk{position:absolute; top:4px; right:6px; font-size:11px; color:#22d3ee;}
+  .lvcell .pb{position:absolute; bottom:4px; font-size:9px; color:var(--muted);}
+  .lvcell .star{position:absolute; top:3px; left:6px; font-size:11px; color:#fbbf24;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:10px 16px; margin-top:12px; font-size:13px; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:7px;}
+  .swatch{width:16px;height:16px;border-radius:5px; display:inline-block;}
+
+  .win-stats{display:flex; justify-content:center; gap:26px; margin:16px 0 4px;}
+  .win-stats .v{font-size:24px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .win-stats .k{font-size:11px; color:var(--muted); text-align:center;}
+  .perfect{display:none; margin-top:8px; text-align:center; font-weight:800; letter-spacing:2px;
+    color:#fbbf24; text-shadow:0 0 14px rgba(251,191,36,.7);}
+  .perfect.show{display:block;}
+  .footnote{text-align:center; font-size:11px; color:var(--muted); margin-top:18px;}
+  a{color:#22d3ee;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <button class="btn" id="menuBtn" title="メニュー" aria-label="メニュー">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <div class="title-wrap">
+      <div class="title">LUMIBOX</div>
+      <div class="sub" id="lvName">Level 1</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="stat"><div class="v" id="moveCount">0</div><div class="k">MOVES</div></div>
+    <div class="stat"><div class="v" id="bestVal">–</div><div class="k">BEST</div></div>
+    <button class="btn" id="undoBtn" title="もどす" aria-label="もどす">
+      <svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>
+    </button>
+    <button class="btn" id="resetBtn" title="やり直し" aria-label="やり直し">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>
+    </button>
+    <button class="btn" id="soundBtn" title="サウンド" aria-label="サウンド">
+      <svg viewBox="0 0 24 24" id="soundIcon"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a3 3 0 0 1 0 6"/></svg>
+    </button>
+  </div>
+
+  <div id="stage">
+    <canvas id="board"></canvas>
+    <div id="tip"></div>
+  </div>
+
+  <div id="pad">
+    <button class="dbtn" id="dUp"   aria-label="上"><svg viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"/></svg></button>
+    <button class="dbtn" id="dLeft" aria-label="左"><svg viewBox="0 0 24 24"><polyline points="15 6 9 12 15 18"/></svg></button>
+    <button class="dbtn" id="dDown" aria-label="下"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <button class="dbtn" id="dRight"aria-label="右"><svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg></button>
+  </div>
+
+  <!-- メニュー / レベル選択 -->
+  <div class="overlay" id="menuOverlay">
+    <div class="card">
+      <h1>LUMIBOX</h1>
+      <p>光の箱を、同じ色のゴールへ運ぶパズル。<br>箱は<b>押す</b>ことしかできない（引けない）のがミソ。行きづまったら「もどす」でやり直せます。</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:#e8eef7"></i>箱</span>
+        <span><i class="swatch" style="background:transparent;border:2px solid #e8eef7"></i>ゴール</span>
+        <span><i class="swatch" style="background:#22d3ee"></i><i class="swatch" style="background:#f472b6"></i><i class="swatch" style="background:#fbbf24"></i>色つきは同じ色へ</span>
+      </div>
+      <div class="lvgrid" id="lvGrid"></div>
+      <p class="footnote">スマホ：スワイプで移動・床タップでその場所まで歩く／PC：矢印キー or WASD・Zでもどす・Rでやり直し</p>
+    </div>
+  </div>
+
+  <!-- クリア -->
+  <div class="overlay" id="winOverlay">
+    <div class="card" style="text-align:center;">
+      <h2 id="winTitle">クリア！</h2>
+      <div class="perfect" id="perfectTag">★ PERFECT ★</div>
+      <div class="win-stats">
+        <div><div class="v" id="winMoves">0</div><div class="k">あなたの手数</div></div>
+        <div><div class="v" id="winPar">0</div><div class="k">最少手数</div></div>
+        <div><div class="v" id="winBest">0</div><div class="k">自己ベスト</div></div>
+      </div>
+      <button class="big-btn" id="nextBtn">つぎのレベル →</button>
+      <button class="ghost-btn" id="winRetryBtn">もう一度（手数をちぢめる）</button>
+      <button class="ghost-btn" id="winMenuBtn">レベル選択へ</button>
+    </div>
+  </div>
+
+  <!-- 全クリア -->
+  <div class="overlay" id="clearAllOverlay">
+    <div class="card" style="text-align:center;">
+      <h1>ALL CLEAR 🎉</h1>
+      <p>すべてのレベルをクリアしました。<br>手数をちぢめて自己ベスト更新に挑戦したり、★PERFECT集めもどうぞ。</p>
+      <button class="big-btn" id="clearAllMenuBtn">レベル選択へ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   Lumibox — 光の箱パズル（倉庫番＋色合わせ）
+   レベル記法:
+     #=壁  (空白)=床  .=ゴール(無色)  $=箱(無色)  *=箱on ゴール  @=自分  +=自分onゴール
+     A/B/C/D = 色つき箱(色0/1/2/3)   a/b/c/d = 色つきゴール(色0/1/2/3)
+   ========================================================================= */
+
+// 色パレット（index: -1=無色, 0..3=色つき）
+const COLORS = {
+  "-1":{ box:"#e8eef7", glow:"rgba(232,238,247,0.55)", ring:"#e8eef7" },
+  "0": { box:"#22d3ee", glow:"rgba(34,211,238,0.6)",   ring:"#22d3ee" },
+  "1": { box:"#f472b6", glow:"rgba(244,114,182,0.6)",  ring:"#f472b6" },
+  "2": { box:"#fbbf24", glow:"rgba(251,191,36,0.6)",   ring:"#fbbf24" },
+  "3": { box:"#34d399", glow:"rgba(52,211,153,0.6)",   ring:"#34d399" },
+};
+const PLAYER_COLOR = "#a78bfa";
+
+/* ---------- レベルデータ ---------- */
+const LEVELS = [
+  { name:"はじめの一押し", tip:"箱を押して、白い枠（ゴール）に入れよう", grid:[
+    "#######",
+    "#     #",
+    "# @$ .#",
+    "#     #",
+    "#######",
+  ]},
+  { name:"曲がり角", tip:"押せるのは前から。回り込んで向きを変えよう", grid:[
+    "########",
+    "#      #",
+    "# @$   #",
+    "#  #   #",
+    "#  . # #",
+    "#      #",
+    "########",
+  ]},
+  { name:"ふたつ並べて", tip:"箱は引けない。角に押し込むと詰むので注意", grid:[
+    "########",
+    "#  .   #",
+    "# $@$  #",
+    "#   .  #",
+    "#      #",
+    "########",
+  ]},
+  { name:"行き止まりに注意", tip:"順番が大事。先に奥のゴールから埋めよう", grid:[
+    "#########",
+    "#       #",
+    "# . $ @ #",
+    "# . $   #",
+    "#       #",
+    "#########",
+  ]},
+  { name:"せまい通路", tip:"通路では押す向きをよく考えて", grid:[
+    "########",
+    "#   #  #",
+    "# @ # .#",
+    "# $    #",
+    "#   #  #",
+    "# .$ # #",
+    "#      #",
+    "########",
+  ]},
+  // ---- 色合わせ導入 ----
+  { name:"色をそろえる", tip:"色つきの箱は、同じ色のゴールへ！", grid:[
+    "########",
+    "#a    b#",
+    "#      #",
+    "# A @B #",
+    "#      #",
+    "#      #",
+    "########",
+  ]},
+  { name:"二色まぜこぜ", tip:"どちらの色から運ぶ？順番を見きわめよう", grid:[
+    "#########",
+    "#a     b#",
+    "#  B A  #",
+    "#   @   #",
+    "#  a b  #",
+    "#       #",
+    "#########",
+  ]},
+  { name:"すれちがい", tip:"水色は右上へ、桃色は左上へ。うまくすれ違おう", grid:[
+    "##########",
+    "#b      a#",
+    "#        #",
+    "#  A  B  #",
+    "#   @    #",
+    "#        #",
+    "##########",
+  ]},
+  { name:"四隅", tip:"4つの箱を四方のゴールへ。詰みに注意", grid:[
+    "##########",
+    "#        #",
+    "# .    . #",
+    "#  $  $  #",
+    "#   @    #",
+    "#  $  $  #",
+    "# .    . #",
+    "##########",
+  ]},
+  { name:"押し込みパズル", tip:"無色の箱と色つきを両方そろえて", grid:[
+    "##########",
+    "#a      b#",
+    "# A $$ B #",
+    "#   @    #",
+    "# .    . #",
+    "#        #",
+    "##########",
+  ]},
+  { name:"three colors", tip:"3色そろえばクリア。作業スペースを確保して", grid:[
+    "##########",
+    "#a  b  c #",
+    "#        #",
+    "# A B C  #",
+    "#   @    #",
+    "#        #",
+    "##########",
+  ]},
+  { name:"仕分け", tip:"色つきと無色、ぜんぶ上のゴールへ運ぼう", grid:[
+    "##########",
+    "#a  b  . #",
+    "#        #",
+    "#        #",
+    "#  A B $ #",
+    "#   @    #",
+    "##########",
+  ]},
+  { name:"倉庫", tip:"4つの箱をすべてのゴールへ。詰みに注意", grid:[
+    "##########",
+    "#  .  .  #",
+    "# $$  $$ #",
+    "#   @    #",
+    "#  .  .  #",
+    "#        #",
+    "##########",
+  ]},
+  { name:"色の仕分け", tip:"左右に色を仕分け。中央で交換しよう", grid:[
+    "###########",
+    "#a   @   b#",
+    "#  B   A  #",
+    "#         #",
+    "#b       a#",
+    "###########",
+  ]},
+  { name:"最後の試練", tip:"水色は右、桃色は左、黄色は真上。総仕上げ！", grid:[
+    "###########",
+    "#b   c   a#",
+    "#         #",
+    "#  A C B  #",
+    "#    @    #",
+    "#         #",
+    "###########",
+  ]},
+];
+
+/* ---------- 状態 ---------- */
+const DIRS = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+let level = null;          // 現在レベルのパース結果
+let levelIndex = 0;
+let walls, targets;        // walls:Set "x,y" / targets:Map "x,y"->color
+let boxes = [];            // {x,y,color, rx,ry}  rx,ry=描画用座標(セル単位float)
+let player = null;         // {x,y, rx,ry, path:[], face:1}
+let moveCount = 0;
+let history = [];          // undo用スナップショット
+let cols=0, rows=0;
+let particles = [];
+let bump = {x:0,y:0,t:0};  // 壁にぶつかったときの小さな揺れ
+let won = false;
+let lastTime = 0;
+const SMOOTH = 0.020;      // 移動の追従の速さ(小さいほどキビキビ)
+
+/* ---------- セーブデータ ---------- */
+const SAVE_KEY = "LUMIBOX_SAVE_V1";
+let save = loadSave();
+function loadSave(){
+  try{ const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if(s && typeof s==="object") return s; }catch(e){}
+  return { unlocked:1, best:{}, sound:true };
+}
+function persist(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} }
+
+/* ---------- DOM ---------- */
+const $ = id => document.getElementById(id);
+const canvas = $("board"), ctx = canvas.getContext("2d");
+let DPR = Math.min(window.devicePixelRatio||1, 2);
+
+/* ---------- レベルのパース ---------- */
+function parseLevel(def){
+  const g = def.grid;
+  const W = Math.max(...g.map(r=>r.length));
+  const H = g.length;
+  const w = new Set();
+  const t = new Map();
+  const bx = [];
+  let pl = null;
+  for(let y=0;y<H;y++){
+    const row = g[y];
+    for(let x=0;x<W;x++){
+      const ch = row[x] || " ";
+      switch(ch){
+        case "#": w.add(x+","+y); break;
+        case ".": t.set(x+","+y, -1); break;
+        case "$": bx.push({x,y,color:-1}); break;
+        case "*": t.set(x+","+y,-1); bx.push({x,y,color:-1}); break;
+        case "@": pl={x,y}; break;
+        case "+": t.set(x+","+y,-1); pl={x,y}; break;
+        case "A": case "B": case "C": case "D":
+          bx.push({x,y,color:ch.charCodeAt(0)-65}); break;
+        case "a": case "b": case "c": case "d":
+          t.set(x+","+y, ch.charCodeAt(0)-97); break;
+        default: break; // 床
+      }
+    }
+  }
+  return { W,H, walls:w, targets:t, boxes:bx, player:pl, name:def.name, tip:def.tip };
+}
+
+function loadLevel(idx){
+  levelIndex = idx;
+  const def = LEVELS[idx];
+  level = parseLevel(def);
+  cols = level.W; rows = level.H;
+  walls = level.walls; targets = level.targets;
+  boxes = level.boxes.map(b=>({x:b.x,y:b.y,color:b.color, rx:b.x, ry:b.y}));
+  player = { x:level.player.x, y:level.player.y, rx:level.player.x, ry:level.player.y, path:[], face:1 };
+  moveCount = 0; history = []; particles = []; won = false; bump={x:0,y:0,t:0};
+  $("lvName").textContent = "Level "+(idx+1)+" · "+def.name;
+  updateHUD();
+  resize();
+  showTip(def.tip);
+  $("undoBtn").disabled = true;
+}
+
+/* ---------- 当たり判定 ---------- */
+const key = (x,y)=>x+","+y;
+function isWall(x,y){ return walls.has(key(x,y)); }
+function boxAt(x,y){ return boxes.find(b=>b.x===x && b.y===y); }
+
+/* ---------- 移動 ---------- */
+function snapshot(){
+  return { px:player.x, py:player.y,
+           boxes:boxes.map(b=>({x:b.x,y:b.y})), moves:moveCount };
+}
+function pushHistory(){
+  history.push(snapshot());
+  if(history.length>500) history.shift();
+  $("undoBtn").disabled = false;
+}
+
+// dir:"up/down/left/right"。戻り値 true=動いた
+function move(dir){
+  if(won) return false;
+  const [dx,dy] = DIRS[dir];
+  player.face = dx<0 ? -1 : (dx>0?1:player.face);
+  const nx = player.x+dx, ny = player.y+dy;
+  if(isWall(nx,ny)){ triggerBump(dx,dy); sfx("bump"); return false; }
+  const box = boxAt(nx,ny);
+  if(box){
+    const bx2 = nx+dx, by2 = ny+dy;
+    if(isWall(bx2,by2) || boxAt(bx2,by2)){ triggerBump(dx,dy); sfx("bump"); return false; }
+    // 押せる
+    pushHistory();
+    player.path = [];
+    box.x = bx2; box.y = by2;
+    player.x = nx; player.y = ny;
+    moveCount++;
+    const onTarget = targets.has(key(box.x,box.y)) && targets.get(key(box.x,box.y))===box.color;
+    sfx(onTarget ? "place" : "push");
+    if(onTarget) burst(box.x, box.y, box.color);
+    afterMove();
+    return true;
+  } else {
+    // 歩くだけ
+    pushHistory();
+    player.path = [];
+    player.x = nx; player.y = ny;
+    moveCount++;
+    sfx("move");
+    afterMove();
+    return true;
+  }
+}
+
+function afterMove(){
+  updateHUD();
+  if(checkWin()) doWin();
+}
+
+function triggerBump(dx,dy){ bump = {x:dx*0.16, y:dy*0.16, t:1}; }
+
+/* ---------- タップ移動（経路探索：箱は無視＝歩くだけ） ---------- */
+function walkTo(tx,ty){
+  if(won) return;
+  if(isWall(tx,ty) || boxAt(tx,ty)) return;
+  if(tx===player.x && ty===player.y) return;
+  // BFS
+  const start = key(player.x,player.y);
+  const goal = key(tx,ty);
+  const prev = new Map(); prev.set(start,null);
+  const q = [[player.x,player.y]];
+  let found = false;
+  while(q.length){
+    const [cx,cy] = q.shift();
+    if(cx===tx && cy===ty){ found=true; break; }
+    for(const d in DIRS){
+      const [dx,dy]=DIRS[d];
+      const ax=cx+dx, ay=cy+dy, k=key(ax,ay);
+      if(prev.has(k)) continue;
+      if(isWall(ax,ay) || boxAt(ax,ay)) continue;
+      prev.set(k, [cx,cy]);
+      q.push([ax,ay]);
+    }
+  }
+  if(!found) return;
+  // 経路を復元
+  const pathCells = [];
+  let cur = [tx,ty];
+  while(cur){ pathCells.push(cur); const p = prev.get(key(cur[0],cur[1])); cur = p; }
+  pathCells.reverse(); // start ... goal
+  pushHistory();
+  // 先頭(現在地)を除いた各セルへ歩く
+  player.path = pathCells.slice(1).map(c=>({x:c[0],y:c[1]}));
+  player.x = tx; player.y = ty;       // 論理位置は即ゴール
+  moveCount += pathCells.length-1;
+  sfx("move");
+  afterMove();
+}
+
+/* ---------- もどす ---------- */
+function undo(){
+  if(!history.length || won) return;
+  const s = history.pop();
+  player.x = s.px; player.y = s.py; player.path=[];
+  for(let i=0;i<boxes.length;i++){ boxes[i].x=s.boxes[i].x; boxes[i].y=s.boxes[i].y; }
+  moveCount = s.moves;
+  $("undoBtn").disabled = history.length===0;
+  updateHUD(); sfx("undo");
+}
+
+/* ---------- 勝利判定 ---------- */
+function checkWin(){
+  for(const b of boxes){
+    const t = targets.get(key(b.x,b.y));
+    if(t===undefined || t!==b.color) return false;
+  }
+  return true;
+}
+
+function doWin(){
+  won = true;
+  sfx("win");
+  celebrate();
+  const idx = levelIndex;
+  const prevBest = save.best[idx];
+  if(prevBest===undefined || moveCount<prevBest){ save.best[idx]=moveCount; }
+  if(save.unlocked < idx+2 && idx+1 < LEVELS.length){ save.unlocked = idx+2; }
+  persist();
+  // 少し待ってからオーバーレイ（演出を見せる）
+  setTimeout(()=>{
+    const par = PARS[idx] || moveCount;
+    $("winMoves").textContent = moveCount;
+    $("winPar").textContent = par;
+    $("winBest").textContent = save.best[idx];
+    $("perfectTag").classList.toggle("show", moveCount<=par);
+    $("winTitle").textContent = (idx+1>=LEVELS.length) ? "最終ステージ クリア！" : "クリア！";
+    $("nextBtn").style.display = (idx+1>=LEVELS.length) ? "none" : "block";
+    showOverlay("winOverlay");
+  }, 850);
+}
+
+/* =========================================================================
+   描画
+   ========================================================================= */
+let cell=40, ox=0, oy=0; // セルサイズと盤面オフセット
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  const stage = $("stage");
+  const W = stage.clientWidth, H = stage.clientHeight;
+  canvas.width = W*DPR; canvas.height = H*DPR;
+  canvas.style.width = W+"px"; canvas.style.height = H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const pad = 14;
+  cell = Math.floor(Math.min((W-pad*2)/cols, (H-pad*2)/rows));
+  cell = Math.max(18, cell);
+  const bw = cell*cols, bh = cell*rows;
+  ox = Math.floor((W-bw)/2);
+  oy = Math.floor((H-bh)/2);
+}
+
+function rrect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+function draw(time){
+  const W = canvas.width/DPR, H = canvas.height/DPR;
+  ctx.clearRect(0,0,W,H);
+  const t = time*0.001;
+
+  // 盤面の下地（うっすら浮かぶパネル）
+  ctx.save();
+  rrect(ox-8, oy-8, cell*cols+16, cell*rows+16, 18);
+  ctx.fillStyle = "rgba(255,255,255,0.018)";
+  ctx.fill();
+  ctx.restore();
+
+  // 床グリッド
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(isWall(x,y)) continue;
+      const px=ox+x*cell, py=oy+y*cell;
+      rrect(px+2,py+2,cell-4,cell-4,7);
+      ctx.fillStyle = "rgba(255,255,255,0.028)";
+      ctx.fill();
+    }
+  }
+
+  // ゴール（色つきリング）
+  targets.forEach((color,k)=>{
+    const [x,y]=k.split(",").map(Number);
+    const cx=ox+x*cell+cell/2, cy=oy+y*cell+cell/2;
+    const filled = !!(boxAt(x,y) && boxAt(x,y).color===color);
+    const col = COLORS[color];
+    const pulse = 0.5+0.5*Math.sin(t*2.2 + x*0.7 + y*0.5);
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(Math.PI/4);
+    const r = cell*(filled?0.20:0.26);
+    ctx.lineWidth = Math.max(2, cell*0.05);
+    ctx.strokeStyle = col.ring;
+    ctx.globalAlpha = filled ? 0.25 : (0.55+pulse*0.35);
+    ctx.shadowColor = col.glow; ctx.shadowBlur = filled?4:(8+pulse*8);
+    rrect(-r,-r,r*2,r*2,4); ctx.stroke();
+    ctx.restore();
+  });
+
+  // 壁
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(!isWall(x,y)) continue;
+      const px=ox+x*cell, py=oy+y*cell;
+      rrect(px+1.5,py+1.5,cell-3,cell-3,6);
+      const g = ctx.createLinearGradient(px,py,px,py+cell);
+      g.addColorStop(0,"#222d44"); g.addColorStop(1,"#141b2b");
+      ctx.fillStyle=g; ctx.fill();
+      ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.06)"; ctx.stroke();
+    }
+  }
+
+  // 箱
+  for(const b of boxes){
+    const px=ox+b.rx*cell, py=oy+b.ry*cell;
+    const col = COLORS[b.color];
+    const onT = targets.has(key(b.x,b.y)) && targets.get(key(b.x,b.y))===b.color;
+    const m = cell*0.13;
+    const pulse = onT ? (0.5+0.5*Math.sin(t*5)) : 0;
+    ctx.save();
+    ctx.shadowColor = col.glow;
+    ctx.shadowBlur = onT ? 18+pulse*10 : 10;
+    const g = ctx.createLinearGradient(px,py,px+cell,py+cell);
+    g.addColorStop(0, col.box);
+    g.addColorStop(1, shade(col.box,-0.28));
+    ctx.fillStyle = g;
+    rrect(px+m, py+m, cell-m*2, cell-m*2, cell*0.16);
+    ctx.fill();
+    // 内側ハイライト
+    ctx.shadowBlur=0;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = Math.max(1.5, cell*0.04);
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    rrect(px+m+ctx.lineWidth, py+m+ctx.lineWidth, cell-m*2-ctx.lineWidth*2, (cell-m*2)*0.42, cell*0.12);
+    ctx.stroke();
+    ctx.globalAlpha=1;
+    if(onT){ // ゴール済みチェック
+      ctx.strokeStyle="rgba(255,255,255,0.95)"; ctx.lineWidth=Math.max(2,cell*0.06);
+      ctx.lineCap="round";
+      const cx=px+cell/2, cy=py+cell/2, s=cell*0.16;
+      ctx.beginPath();
+      ctx.moveTo(cx-s, cy);
+      ctx.lineTo(cx-s*0.2, cy+s*0.7);
+      ctx.lineTo(cx+s*1.1, cy-s*0.7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // プレイヤー（光る玉）
+  {
+    const px=ox+player.rx*cell+cell/2, py=oy+player.ry*cell+cell/2;
+    const r = cell*0.30;
+    const pulse = 0.5+0.5*Math.sin(t*3);
+    ctx.save();
+    ctx.shadowColor = "rgba(167,139,250,0.8)";
+    ctx.shadowBlur = 16+pulse*8;
+    const g = ctx.createRadialGradient(px-r*0.3,py-r*0.3,r*0.2, px,py,r);
+    g.addColorStop(0,"#d6c6ff"); g.addColorStop(0.6,PLAYER_COLOR); g.addColorStop(1,"#6d4fd6");
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2); ctx.fill();
+    // 目（向きで少しずれる）
+    ctx.shadowBlur=0; ctx.fillStyle="rgba(10,14,22,0.85)";
+    const ex=player.face*r*0.18;
+    ctx.beginPath(); ctx.arc(px-r*0.30+ex, py-r*0.08, r*0.13, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px+r*0.30+ex, py-r*0.08, r*0.13, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // パーティクル
+  for(const p of particles){
+    ctx.save();
+    ctx.globalAlpha = Math.max(0,p.life);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+function shade(hex, amt){ // hex を明暗調整
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  r=Math.round(r*(1+amt)); g=Math.round(g*(1+amt)); b=Math.round(b*(1+amt));
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+/* ---------- アニメーション更新 ---------- */
+function update(dt){
+  // プレイヤーの歩き経路を進める
+  if(player.path.length){
+    const head = player.path[0];
+    const dx = (ox+head.x*cell) - (ox+player.rx*cell);
+    const dy = (oy+head.y*cell) - (oy+player.ry*cell);
+    if(Math.hypot(dx,dy) < cell*0.12){
+      player.rx = head.x; player.ry = head.y;
+      player.path.shift();
+    }
+    const target = player.path.length ? player.path[0] : {x:player.x,y:player.y};
+    smoothTo(player, target.x, target.y, dt);
+  } else {
+    smoothTo(player, player.x, player.y, dt);
+  }
+  for(const b of boxes) smoothBox(b, dt);
+
+  // bump 減衰
+  bump.t = Math.max(0, bump.t - dt*0.006);
+
+  // パーティクル
+  for(const p of particles){
+    p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 0.0008*dt;
+    p.life -= dt*0.0022; p.r *= 0.992;
+  }
+  particles = particles.filter(p=>p.life>0);
+}
+
+function smoothTo(obj, tx, ty, dt){
+  const f = Math.min(1, dt*SMOOTH*60/16.67);
+  obj.rx += (tx - obj.rx) * f;
+  obj.ry += (ty - obj.ry) * f;
+  if(Math.abs(tx-obj.rx)<0.001) obj.rx=tx;
+  if(Math.abs(ty-obj.ry)<0.001) obj.ry=ty;
+}
+function smoothBox(b, dt){
+  const f = Math.min(1, dt*SMOOTH*60/16.67);
+  b.rx += (b.x - b.rx)*f; b.ry += (b.y - b.ry)*f;
+  if(Math.abs(b.x-b.rx)<0.001) b.rx=b.x;
+  if(Math.abs(b.y-b.ry)<0.001) b.ry=b.y;
+}
+
+/* ---------- パーティクル ---------- */
+function burst(cx,cy,color){
+  const c = COLORS[color].box;
+  const px=ox+cx*cell+cell/2, py=oy+cy*cell+cell/2;
+  for(let i=0;i<14;i++){
+    const a = Math.random()*Math.PI*2, sp = (0.04+Math.random()*0.12)*cell/40;
+    particles.push({x:px,y:py, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, r:cell*0.06+Math.random()*cell*0.05, life:1, color:c});
+  }
+}
+function celebrate(){
+  const palette = ["#a78bfa","#22d3ee","#f472b6","#fbbf24","#34d399"];
+  for(const b of boxes){
+    setTimeout(()=>burst(b.x,b.y,b.color), Math.random()*300);
+  }
+  const W=canvas.width/DPR;
+  for(let i=0;i<60;i++){
+    particles.push({
+      x:Math.random()*W, y:-10,
+      vx:(Math.random()-0.5)*0.1, vy:0.05+Math.random()*0.15,
+      r:3+Math.random()*4, life:1.4, color:palette[i%palette.length]
+    });
+  }
+}
+
+/* ---------- メインループ ---------- */
+function loop(time){
+  const dt = Math.min(40, time-lastTime || 16);
+  lastTime = time;
+  update(dt);
+  // bump をプレイヤー描画に反映（揺れ）
+  const bx = player.rx, by = player.ry;
+  player.rx += bump.x*bump.t; player.ry += bump.y*bump.t;
+  draw(time);
+  player.rx = bx; player.ry = by;
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================================
+   サウンド（WebAudioで合成。ファイル不要）
+   ========================================================================= */
+let actx = null;
+function audio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function tone(freq, dur, type, vol, when){
+  if(!save.sound) return;
+  const a = audio(); if(!a) return;
+  const t0 = a.currentTime + (when||0);
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type||"sine"; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol||0.12, t0+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(t0); o.stop(t0+dur+0.02);
+}
+function sfx(kind){
+  switch(kind){
+    case "move":  tone(330,0.05,"sine",0.05); break;
+    case "push":  tone(180,0.08,"triangle",0.09); break;
+    case "place": tone(660,0.12,"sine",0.12); tone(990,0.14,"sine",0.07,0.04); break;
+    case "bump":  tone(90,0.07,"square",0.05); break;
+    case "undo":  tone(280,0.06,"sine",0.06); break;
+    case "win":   [523,659,784,1047].forEach((f,i)=>tone(f,0.25,"sine",0.12,i*0.09)); break;
+  }
+}
+
+/* =========================================================================
+   UI
+   ========================================================================= */
+function updateHUD(){
+  $("moveCount").textContent = moveCount;
+  const b = save.best[levelIndex];
+  $("bestVal").textContent = (b===undefined) ? "–" : b;
+}
+let tipTimer=null;
+function showTip(text){
+  const el=$("tip"); el.textContent=text; el.classList.add("show");
+  clearTimeout(tipTimer);
+  tipTimer=setTimeout(()=>el.classList.remove("show"), 3200);
+}
+function showOverlay(id){ $(id).classList.add("show"); }
+function hideOverlay(id){ $(id).classList.remove("show"); }
+
+function buildLevelGrid(){
+  const grid = $("lvGrid"); grid.innerHTML="";
+  for(let i=0;i<LEVELS.length;i++){
+    const cell=document.createElement("div");
+    cell.className="lvcell";
+    const unlocked = i < save.unlocked;
+    const cleared = save.best[i]!==undefined;
+    if(!unlocked) cell.classList.add("locked");
+    if(cleared) cell.classList.add("cleared");
+    cell.innerHTML = (unlocked ? (i+1) : "🔒")
+      + (cleared ? '<span class="chk">✓</span>' : "")
+      + (cleared && save.best[i]<=(PARS[i]||1e9) ? '<span class="star">★</span>' : "")
+      + (cleared ? '<span class="pb">'+save.best[i]+'手</span>' : "");
+    if(unlocked){
+      cell.addEventListener("click", ()=>{ hideOverlay("menuOverlay"); loadLevel(i); });
+    }
+    grid.appendChild(cell);
+  }
+}
+
+/* ---------- 入力 ---------- */
+function setupInput(){
+  // キーボード
+  window.addEventListener("keydown", e=>{
+    let dir=null;
+    switch(e.key){
+      case "ArrowUp": case "w": case "W": dir="up"; break;
+      case "ArrowDown": case "s": case "S": dir="down"; break;
+      case "ArrowLeft": case "a": case "A": dir="left"; break;
+      case "ArrowRight": case "d": case "D": dir="right"; break;
+      case "z": case "Z": undo(); e.preventDefault(); return;
+      case "r": case "R": loadLevel(levelIndex); e.preventDefault(); return;
+      case "Escape": toggleMenu(); return;
+    }
+    if(dir){ e.preventDefault(); resumeAudio(); move(dir); }
+  });
+
+  // Dパッド
+  const padMap={dUp:"up",dDown:"down",dLeft:"left",dRight:"right"};
+  for(const id in padMap){
+    const el=$(id);
+    const handler=e=>{ e.preventDefault(); resumeAudio(); move(padMap[id]); };
+    el.addEventListener("click", handler);
+  }
+
+  // ボタン
+  $("undoBtn").addEventListener("click", ()=>{ resumeAudio(); undo(); });
+  $("resetBtn").addEventListener("click", ()=>{ resumeAudio(); loadLevel(levelIndex); });
+  $("menuBtn").addEventListener("click", toggleMenu);
+  $("soundBtn").addEventListener("click", toggleSound);
+  $("nextBtn").addEventListener("click", ()=>{ hideOverlay("winOverlay"); const n=levelIndex+1; if(n<LEVELS.length) loadLevel(n); });
+  $("winRetryBtn").addEventListener("click", ()=>{ hideOverlay("winOverlay"); loadLevel(levelIndex); });
+  $("winMenuBtn").addEventListener("click", ()=>{ hideOverlay("winOverlay"); openMenu(); });
+  $("clearAllMenuBtn").addEventListener("click", ()=>{ hideOverlay("clearAllOverlay"); openMenu(); });
+
+  // タッチ：スワイプ＋タップ移動
+  const stage=$("stage");
+  let sx=0,sy=0,st=0,moved=false;
+  stage.addEventListener("touchstart", e=>{
+    resumeAudio();
+    const t=e.changedTouches[0]; sx=t.clientX; sy=t.clientY; st=Date.now(); moved=false;
+  }, {passive:true});
+  stage.addEventListener("touchmove", e=>{
+    const t=e.changedTouches[0];
+    if(Math.hypot(t.clientX-sx, t.clientY-sy) > 24 && !moved){
+      moved=true;
+      const dx=t.clientX-sx, dy=t.clientY-sy;
+      if(Math.abs(dx)>Math.abs(dy)) move(dx>0?"right":"left");
+      else move(dy>0?"down":"up");
+    }
+  }, {passive:true});
+  stage.addEventListener("touchend", e=>{
+    if(moved) return;
+    if(Date.now()-st > 500) return;
+    const t=e.changedTouches[0];
+    const cx=Math.floor((t.clientX - canvas.getBoundingClientRect().left - ox)/cell);
+    const cy=Math.floor((t.clientY - canvas.getBoundingClientRect().top - oy)/cell);
+    if(cx>=0&&cy>=0&&cx<cols&&cy<rows) walkTo(cx,cy);
+  }, {passive:true});
+
+  // マウスでも床タップ移動（PC確認用）
+  canvas.addEventListener("click", e=>{
+    if(matchMedia("(pointer:coarse)").matches) return;
+    resumeAudio();
+    const r=canvas.getBoundingClientRect();
+    const cx=Math.floor((e.clientX - r.left - ox)/cell);
+    const cy=Math.floor((e.clientY - r.top - oy)/cell);
+    if(cx>=0&&cy>=0&&cx<cols&&cy<rows) walkTo(cx,cy);
+  });
+
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", ()=>setTimeout(resize,200));
+}
+
+function resumeAudio(){ const a=audio(); if(a && a.state==="suspended") a.resume(); }
+function toggleMenu(){ const o=$("menuOverlay"); if(o.classList.contains("show")) hideOverlay("menuOverlay"); else openMenu(); }
+function openMenu(){ buildLevelGrid(); showOverlay("menuOverlay"); }
+function updateSoundIcon(){
+  $("soundIcon").innerHTML = save.sound
+    ? '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a3 3 0 0 1 0 6"/>'
+    : '<path d="M4 9v6h4l5 4V5L8 9H4z"/><line x1="16" y1="9" x2="22" y2="15"/><line x1="22" y1="9" x2="16" y2="15"/>';
+}
+function toggleSound(){
+  save.sound=!save.sound; persist();
+  updateSoundIcon();
+  if(save.sound) sfx("move");
+}
+
+/* ---------- 起動 ---------- */
+const PARS = {0:2, 1:12, 2:10, 3:8, 4:16, 5:14, 6:15, 7:21, 8:23, 9:23, 10:19, 11:24, 12:23, 13:20, 14:28}; // verify.mjs が算出した最少手数を埋め込む（無ければ自分の手数=par扱い）
+function detectTouch(){
+  if(matchMedia("(pointer:coarse)").matches || "ontouchstart" in window){
+    document.body.classList.add("touch");
+  }
+}
+function init(){
+  detectTouch();
+  setupInput();
+  updateSoundIcon(); // 保存済みの音設定にアイコンを合わせる
+  // 続きから or 最初から
+  const start = Math.min(Math.max(0, save.unlocked-1), LEVELS.length-1);
+  loadLevel(start);
+  buildLevelGrid();
+  requestAnimationFrame(t=>{ lastTime=t; loop(t); });
+  // 初回はメニューを開いて遊び方を見せる
+  if(save.unlocked===1 && save.best[0]===undefined){ openMenu(); }
+}
+window.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
