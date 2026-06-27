@@ -309,40 +309,41 @@ const LEVELS = [
     "###########",
   ]},
 
-  { name:"大回り必須", tip:"まっすぐ押しても届かない。大きく迂回しよう", grid:[
+  { name:"三色大移動", tip:"全員が反対側のゴールへ向かう。どの順番で動かす？", grid:[
     "###########",
-    "#b       a#",
+    "#c   b   a#",
     "#  #   #  #",
-    "#  A   B  #",
+    "# A     C #",
+    "#    B    #",
     "#    @    #",
     "###########",
   ]},
 
-  { name:"三色ソート", tip:"方向を間違えると詰む。正しく押せる向きは一つだけ", grid:[
-    "###########",
-    "#a#  b  #c#",
-    "#         #",
-    "#  A B C  #",
-    "#    @    #",
-    "###########",
-  ]},
-
-  { name:"色の交差", tip:"反対側のゴールへ届けるには？止め石を利用しよう", grid:[
+  { name:"止め石チェーン", tip:"BはAがいないと目標に届かない。先に何を置くべき？", grid:[
     "#########",
-    "#a     b#",
-    "#       #",
-    "# B   A #",
+    "##ab   c#",
+    "# # #   #",
+    "# A B C #",
     "#   @   #",
     "#########",
   ]},
 
-  { name:"最終問題", tip:"止め石を動かすな。順番が全てを決める", grid:[
+  { name:"四段チェーン", tip:"4色を正しい順番で置かないと完全に詰む。順番が全てを決める", grid:[
     "###########",
-    "#a  .    b#",
-    "#         #",
-    "# A $ B   #",
-    "#   @     #",
+    "###abc   d#",
+    "#  # # #  #",
+    "#  A B C D#",
+    "#     @   #",
     "###########",
+  ]},
+
+  { name:"純粋チェーン", tip:"全員が連鎖で止まる。どの箱も一人では届かない", grid:[
+    "#############",
+    "####abcd    #",
+    "#   # # #   #",
+    "#   A B C D #",
+    "#       @   #",
+    "#############",
   ]},
 ];
 
@@ -363,7 +364,7 @@ let lastTime = 0;
 const SMOOTH = 0.020;      // 移動の追従の速さ(小さいほどキビキビ)
 
 /* ---------- セーブデータ ---------- */
-const SAVE_KEY = "LUMIBOX_SAVE_V1";
+const SAVE_KEY = "LUMIBOX_SAVE_V2";
 let save = loadSave();
 function loadSave(){
   try{ const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if(s && typeof s==="object") return s; }catch(e){}
@@ -959,7 +960,7 @@ function toggleSound(){
 }
 
 /* ---------- 起動 ---------- */
-const PARS = {0:1, 1:8, 2:12, 3:17, 4:27, 5:17, 6:22, 7:16}; // verify.mjs が算出した最少手数を埋め込む（無ければ自分の手数=par扱い）
+const PARS = {0:1, 1:8, 2:12, 3:17, 4:30, 5:30, 6:46, 7:51}; // verify.mjs が算出した最少手数を埋め込む（無ければ自分の手数=par扱い）
 function detectTouch(){
   if(matchMedia("(pointer:coarse)").matches || "ontouchstart" in window){
     document.body.classList.add("touch");
