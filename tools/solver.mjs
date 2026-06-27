@@ -1,5 +1,5 @@
 // Lumibox 共有ソルバ（verify.mjs / smoke.mjs から使う）
-// アイス滑り版: 箱は壁か別の箱に当たるまで滑る
+// アイス滑り版 + 矢印タイル: 箱は壁か別の箱に当たるまで滑り、矢印タイルで方向転換
 import fs from "node:fs";
 
 export const DIRS = [
@@ -7,10 +7,17 @@ export const DIRS = [
   { dx: -1, dy: 0, name: "left" }, { dx: 1, dy: 0, name: "right" },
 ];
 
+// 矢印文字 → {dx,dy}
+const ARROW_DIR = {
+  ">": { dx: 1, dy: 0 }, "<": { dx: -1, dy: 0 },
+  "^": { dx: 0, dy: -1 }, "v": { dx: 0, dy: 1 },
+};
+
 export function parse(def) {
   const g = def.grid;
   const W = Math.max(...g.map(r => r.length)), H = g.length;
   const walls = new Set(), targets = new Map(), boxes = [];
+  const arrows = new Map(); // "x,y" -> {dx,dy}
   let player = null;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const ch = g[y][x] || " ";
@@ -22,21 +29,33 @@ export function parse(def) {
     else if (ch === "+") { targets.set(x + "," + y, -1); player = { x, y }; }
     else if ("ABCD".includes(ch)) boxes.push({ x, y, c: ch.charCodeAt(0) - 65 });
     else if ("abcd".includes(ch)) targets.set(x + "," + y, ch.charCodeAt(0) - 97);
+    else if (ch in ARROW_DIR) arrows.set(x + "," + y, ARROW_DIR[ch]);
   }
-  return { W, H, walls, targets, boxes, player };
+  return { W, H, walls, targets, boxes, player, arrows };
 }
 
-// アイス滑り: 箱を (sx,sy) から (dx,dy) 方向へ滑らせた最終位置を返す
-function slideBox(sx, sy, dx, dy, walls, boxes) {
+// アイス滑り + 矢印: 箱を (sx,sy) から (dx,dy) 方向へ滑らせた最終位置を返す
+// 矢印タイルに乗ると強制的に方向転換。ループはnullで返す
+function slideBox(sx, sy, dx, dy, walls, boxes, arrows) {
   let x = sx, y = sy;
-  while (!walls.has((x + dx) + "," + (y + dy)) && !boxes.some(b => b.x === x + dx && b.y === y + dy)) {
-    x += dx; y += dy;
+  let curDx = dx, curDy = dy;
+  const seen = new Set();
+  while (true) {
+    // 現在位置の矢印チェック
+    const a = arrows.get(x + "," + y);
+    if (a) { curDx = a.dx; curDy = a.dy; }
+    const posDir = x + "," + y + "," + curDx + "," + curDy;
+    if (seen.has(posDir)) return { x, y }; // ループガード
+    seen.add(posDir);
+    const nx = x + curDx, ny = y + curDy;
+    if (walls.has(nx + "," + ny) || boxes.some(b => b.x === nx && b.y === ny)) break;
+    x = nx; y = ny;
   }
   return { x, y };
 }
 
 export function solve(def) {
-  const { walls, targets, boxes, player } = parse(def);
+  const { walls, targets, boxes, player, arrows } = parse(def);
   const isGoal = bs => bs.every(b => targets.get(b.x + "," + b.y) === b.c);
   const keyOf = (px, py, bs) =>
     px + "," + py + "|" + bs.map(b => b.x + "," + b.y + "," + b.c).sort().join(";");
@@ -58,15 +77,16 @@ export function solve(def) {
       for (const { dx, dy, name } of DIRS) {
         const nx = st.px + dx, ny = st.py + dy;
         if (walls.has(nx + "," + ny)) continue;
+        // 矢印タイルはプレイヤーが乗ってもOK（箱だけ向きが変わる）
         const bi = st.bs.findIndex(b => b.x === nx && b.y === ny);
         let nbs;
         if (bi >= 0) {
-          // 箱を滑らせる
+          // 箱を押す: 直後が壁/箱なら押せない（矢印で変わる前の向き）
           const firstX = nx + dx, firstY = ny + dy;
-          if (walls.has(firstX + "," + firstY)) continue; // 直後が壁 = 押せない
-          if (st.bs.some(b => b.x === firstX && b.y === firstY)) continue; // 直後に別箱
-          const { x: finalX, y: finalY } = slideBox(nx, ny, dx, dy, walls, st.bs.filter((_, i) => i !== bi));
-          nbs = st.bs.map((b, i) => i === bi ? { x: finalX, y: finalY, c: b.c } : b);
+          if (walls.has(firstX + "," + firstY)) continue;
+          if (st.bs.some(b => b.x === firstX && b.y === firstY)) continue;
+          const res = slideBox(nx, ny, dx, dy, walls, st.bs.filter((_, i) => i !== bi), arrows);
+          nbs = st.bs.map((b, i) => i === bi ? { x: res.x, y: res.y, c: b.c } : b);
         } else {
           nbs = st.bs;
         }

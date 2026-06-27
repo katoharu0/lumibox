@@ -274,42 +274,34 @@ const PLAYER_COLOR = "#a78bfa";
          A/B/C=色つき箱(0/1/2)  a/b/c=色つきゴール(0/1/2)
    ------------------------------------------- */
 const LEVELS = [
-  { name:"まず一押し", tip:"押すと壁まで滑る！一度押してゴールへ入れよう", grid:[
-    "#######",
-    "#     #",
-    "#@$  .#",
-    "#     #",
-    "#######",
-  ]},
-
-  { name:"折り返し", tip:"一方向では届かない。どこで向きを変える？", grid:[
-    "#######",
-    "#.    #",
-    "#  ## #",
-    "#  $  #",
-    "# @   #",
-    "#######",
-  ]},
-
-  { name:"止め石の順番", tip:"押す順番を間違えると詰む！よく考えてから動かそう", grid:[
-    "##########",
-    "#  . .   #",
-    "#        #",
-    "# $ $ #  #",
-    "#   @    #",
-    "##########",
-  ]},
-
-  { name:"色を届けろ", tip:"同じ色のゴールへ。アルコーブへの入り方に注意", grid:[
+  { name:"矢印スワップ", tip:"矢印タイルに乗った箱は強制的に向きが変わる！使いこなして色を届けよう", grid:[
     "###########",
-    "#a#     #b#",
-    "#         #",
-    "#  A   B  #",
+    "#b       a#",
+    "#  ^   v  #",
+    "# A     B #",
     "#    @    #",
     "###########",
   ]},
 
-  { name:"三色大移動", tip:"全員が反対側のゴールへ向かう。どの順番で動かす？", grid:[
+  { name:"2色届け", tip:"矢印でルートを作ると右端のゴールへ届く。壁に気をつけよう", grid:[
+    "##########",
+    "#a#     b#",
+    "#   >    #",
+    "#  A   B #",
+    "#    @   #",
+    "##########",
+  ]},
+
+  { name:"止め石の順番", tip:"BはAがいないと目標に届かない。どちらを先に動かすべき？", grid:[
+    "#########",
+    "##ab   c#",
+    "# # #   #",
+    "# A B C #",
+    "#   @   #",
+    "#########",
+  ]},
+
+  { name:"三色大移動", tip:"全員が反対側のゴールへ向かう。ぶつかりながら届けよう", grid:[
     "###########",
     "#c   b   a#",
     "#  #   #  #",
@@ -319,16 +311,34 @@ const LEVELS = [
     "###########",
   ]},
 
-  { name:"止め石チェーン", tip:"BはAがいないと目標に届かない。先に何を置くべき？", grid:[
-    "#########",
-    "##ab   c#",
-    "# # #   #",
-    "# A B C #",
-    "#   @   #",
-    "#########",
+  { name:"矢印と連鎖", tip:"矢印が仕掛けた罠に気をつけながら、正しい順番で届けよう", grid:[
+    "#############",
+    "###abc      #",
+    "#   ^ # ^   #",
+    "#   A  B C  #",
+    "#       @   #",
+    "#############",
   ]},
 
-  { name:"四段チェーン", tip:"4色を正しい順番で置かないと完全に詰む。順番が全てを決める", grid:[
+  { name:"逆順チェーン", tip:"左側のゴールに何かを置かないと右が詰まる。逆から考えよう", grid:[
+    "#############",
+    "#d    abcd  #",
+    "#    # # #  #",
+    "# D  A B C  #",
+    "#       @   #",
+    "#############",
+  ]},
+
+  { name:"矢印の罠", tip:"Aを上に押すと矢印で詰む！正しい最初の一手は何？", grid:[
+    "###########",
+    "###abcd   #",
+    "# ^ # #   #",
+    "# A B C D #",
+    "#     @   #",
+    "###########",
+  ]},
+
+  { name:"四段チェーン", tip:"4色を正しい順番で置かないと完全に詰む。一手一手を慎重に", grid:[
     "###########",
     "###abc   d#",
     "#  # # #  #",
@@ -337,7 +347,16 @@ const LEVELS = [
     "###########",
   ]},
 
-  { name:"純粋チェーン", tip:"全員が連鎖で止まる。どの箱も一人では届かない", grid:[
+  { name:"矢印×四段", tip:"矢印の罠と4段チェーンが同時に来る。全体像を把握してから動こう", grid:[
+    "#############",
+    "####abcd    #",
+    "#   ^# # #  #",
+    "#   A B C D #",
+    "#       @   #",
+    "#############",
+  ]},
+
+  { name:"純粋チェーン", tip:"全員が連鎖で止まる。誰一人、一人では届かない", grid:[
     "#############",
     "####abcd    #",
     "#   # # #   #",
@@ -351,7 +370,7 @@ const LEVELS = [
 const DIRS = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
 let level = null;          // 現在レベルのパース結果
 let levelIndex = 0;
-let walls, targets;        // walls:Set "x,y" / targets:Map "x,y"->color
+let walls, targets, arrows; // walls:Set, targets:Map, arrows:Map "x,y"->[dx,dy]
 let boxes = [];            // {x,y,color, rx,ry}  rx,ry=描画用座標(セル単位float)
 let player = null;         // {x,y, rx,ry, path:[], face:1}
 let moveCount = 0;
@@ -364,7 +383,7 @@ let lastTime = 0;
 const SMOOTH = 0.020;      // 移動の追従の速さ(小さいほどキビキビ)
 
 /* ---------- セーブデータ ---------- */
-const SAVE_KEY = "LUMIBOX_SAVE_V2";
+const SAVE_KEY = "LUMIBOX_SAVE_V3";
 let save = loadSave();
 function loadSave(){
   try{ const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if(s && typeof s==="object") return s; }catch(e){}
@@ -385,6 +404,7 @@ function parseLevel(def){
   const w = new Set();
   const t = new Map();
   const bx = [];
+  const ar = new Map();
   let pl = null;
   for(let y=0;y<H;y++){
     const row = g[y];
@@ -401,11 +421,15 @@ function parseLevel(def){
           bx.push({x,y,color:ch.charCodeAt(0)-65}); break;
         case "a": case "b": case "c": case "d":
           t.set(x+","+y, ch.charCodeAt(0)-97); break;
+        case ">": ar.set(x+","+y,[1,0]); break;
+        case "<": ar.set(x+","+y,[-1,0]); break;
+        case "^": ar.set(x+","+y,[0,-1]); break;
+        case "v": ar.set(x+","+y,[0,1]); break;
         default: break; // 床
       }
     }
   }
-  return { W,H, walls:w, targets:t, boxes:bx, player:pl, name:def.name, tip:def.tip };
+  return { W,H, walls:w, targets:t, arrows:ar, boxes:bx, player:pl, name:def.name, tip:def.tip };
 }
 
 function loadLevel(idx){
@@ -413,7 +437,7 @@ function loadLevel(idx){
   const def = LEVELS[idx];
   level = parseLevel(def);
   cols = level.W; rows = level.H;
-  walls = level.walls; targets = level.targets;
+  walls = level.walls; targets = level.targets; arrows = level.arrows;
   boxes = level.boxes.map(b=>({x:b.x,y:b.y,color:b.color, rx:b.x, ry:b.y}));
   player = { x:level.player.x, y:level.player.y, rx:level.player.x, ry:level.player.y, path:[], face:1 };
   moveCount = 0; history = []; particles = []; won = false; bump={x:0,y:0,t:0};
@@ -454,10 +478,17 @@ function move(dir){
     // 押せる
     pushHistory();
     player.path = [];
-    // アイス滑り: 壁か別の箱に当たるまで滑る
-    let slideX = bx2, slideY = by2;
-    while(!isWall(slideX+dx, slideY+dy) && !boxAt(slideX+dx, slideY+dy)){
-      slideX += dx; slideY += dy;
+    // アイス滑り + 矢印タイル: 矢印で向きが変わりながら滑る
+    let slideX = bx2, slideY = by2, sDx=dx, sDy=dy;
+    const _seen=new Set();
+    while(true){
+      const _a=arrows.get(slideX+","+slideY);
+      if(_a){sDx=_a[0];sDy=_a[1];}
+      const _pd=slideX+","+slideY+","+sDx+","+sDy;
+      if(_seen.has(_pd)) break;
+      _seen.add(_pd);
+      if(isWall(slideX+sDx,slideY+sDy)||boxAt(slideX+sDx,slideY+sDy)) break;
+      slideX+=sDx; slideY+=sDy;
     }
     box.x = slideX; box.y = slideY;
     player.x = nx; player.y = ny;
@@ -617,6 +648,32 @@ function draw(time){
       ctx.fill();
     }
   }
+
+  // 矢印タイル
+  if(arrows) arrows.forEach(([adx,ady],k)=>{
+    const [x,y]=k.split(",").map(Number);
+    const cx=ox+x*cell+cell/2, cy=oy+y*cell+cell/2;
+    const pulse=0.45+0.45*Math.sin(t*1.8+x*0.9+y*0.6);
+    ctx.save();
+    ctx.globalAlpha=0.55+pulse*0.3;
+    ctx.strokeStyle="rgba(255,210,60,0.9)";
+    ctx.shadowColor="rgba(255,200,0,0.7)"; ctx.shadowBlur=6+pulse*6;
+    ctx.lineWidth=Math.max(1.5,cell*0.07);
+    ctx.lineCap="round"; ctx.lineJoin="round";
+    const s=cell*0.26;
+    // 矢印本体（adx,ady で向き）
+    ctx.beginPath();
+    ctx.moveTo(cx-adx*s, cy-ady*s);
+    ctx.lineTo(cx+adx*s, cy+ady*s);
+    // 矢印頭
+    const perp=[-ady,adx]; // 90度回転
+    ctx.moveTo(cx+adx*s, cy+ady*s);
+    ctx.lineTo(cx+adx*s-adx*s*0.55+perp[0]*s*0.4, cy+ady*s-ady*s*0.55+perp[1]*s*0.4);
+    ctx.moveTo(cx+adx*s, cy+ady*s);
+    ctx.lineTo(cx+adx*s-adx*s*0.55-perp[0]*s*0.4, cy+ady*s-ady*s*0.55-perp[1]*s*0.4);
+    ctx.stroke();
+    ctx.restore();
+  });
 
   // ゴール（色つきリング）
   targets.forEach((color,k)=>{
@@ -960,7 +1017,7 @@ function toggleSound(){
 }
 
 /* ---------- 起動 ---------- */
-const PARS = {0:1, 1:8, 2:12, 3:17, 4:30, 5:30, 6:46, 7:51}; // verify.mjs が算出した最少手数を埋め込む（無ければ自分の手数=par扱い）
+const PARS = {0:27, 1:15, 2:30, 3:30, 4:30, 5:32, 6:41, 7:46, 8:49, 9:51}; // verify.mjs が算出した最少手数を埋め込む（無ければ自分の手数=par扱い）
 function detectTouch(){
   if(matchMedia("(pointer:coarse)").matches || "ontouchstart" in window){
     document.body.classList.add("touch");
